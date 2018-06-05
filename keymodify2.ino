@@ -1,7 +1,5 @@
 //******* 用途により、下記の定義を設定して下さい ***************************
 #define MYDEBUG      1  // 0:デバッグ情報出力なし 1:デバッグ情報出力あり 
-#define KB_CLK      A4  // PS/2 CLK  IchigoJamのKBD1に接続
-#define KB_DATA     A5  // PS/2 DATA IchigoJamのKBD2に接続
 //**************************************************************************
 
 #include <MsTimer2.h>
@@ -10,20 +8,14 @@
 #include <hidboot.h>
 #include "Keyboard.h"
 
-#define LOBYTE(x) ((char*)(&(x)))[0]
-#define HIBYTE(x) ((char*)(&(x)))[1]
-
 // キーリピートの定義
 #define REPEATTIME      5   // キーを押し続けて、REP_INTERVALxREPEATTIMEmsec後にリピート開始
 #define EMPTY           0   // リピート管理テーブルが空状態
 #define MAXKEYENTRY     6   // リピート管理テーブルサイズ
 #define REP_INTERVAL    100 // リピート間隔 150msec
 
-#define MS_SIKIICHI     10
-
 uint8_t keyentry[MAXKEYENTRY];    // リピート管理テーブル
 uint8_t repeatWait[MAXKEYENTRY];  // リピート開始待ち管理テーブル
-uint8_t enabled = 0;              // PS/2 ホスト送信可能状態
 
 //
 // HIDキーボード レポートパーサークラスの定義
@@ -123,8 +115,7 @@ void sendRepeat() {
     if (keyentry[i] != EMPTY) {
       key = keyentry[i];
       if (repeatWait[i] == 0) {
-        //sendKeyMake(key);
-        sendKeyBreak(key);
+        sendKeyMake(key);
       } else {
         repeatWait[i]--;
       }
@@ -166,9 +157,28 @@ uint8_t KbdRptParser::HandleLockingKeys(USBHID *hid, uint8_t key) {
 void KbdRptParser::OnKeyDown(uint8_t mod, uint8_t key) {
   MsTimer2::stop();
 #if MYDEBUG==1
-  Serial.print(F("DN ["));  Serial.print(F("mod="));  Serial.print(mod, HEX);
-  Serial.print(F(" key="));  Serial.print(key, HEX);  Serial.println(F("]"));
+  Serial.print(F("DN ["));  Serial.print(F("mod="));  Serial.print(mod, DEC);
+  Serial.print(F(" key="));  Serial.print(key, DEC);  Serial.println(F("]"));
 #endif
+
+  //special
+  // 変換キーをSHIFTにする
+  if (key == 138) {
+    Keyboard.press(KEY_LEFT_SHIFT);
+    return;
+  }
+  // 無変換キーをCTRLにする
+  if (key == 139) {
+    Keyboard.press(KEY_LEFT_CTRL);
+    return;
+  }
+  // 全角半角きりかえ
+  if (key == 136) {
+    Keyboard.press(KEY_LEFT_ALT);
+    Keyboard.press('`');
+    return;
+  }
+
   if (sendKeyMake(key))
     addKey(key);
   MsTimer2::start();
@@ -183,9 +193,28 @@ void KbdRptParser::OnKeyDown(uint8_t mod, uint8_t key) {
 void KbdRptParser::OnKeyUp(uint8_t mod, uint8_t key) {
   MsTimer2::stop();
 #if MYDEBUG==1
-  Serial.print(F("UP ["));  Serial.print(F("mod="));  Serial.print(mod, HEX);
-  Serial.print(F(" key="));  Serial.print(key, HEX);  Serial.println(F("]"));
+  Serial.print(F("UP ["));  Serial.print(F("mod="));  Serial.print(mod, DEC);
+  Serial.print(F(" key="));  Serial.print(key, DEC);  Serial.println(F("]"));
 #endif
+
+  //special
+  // 変換キーをSHIFTにする
+  if (key == 138) {
+    Keyboard.release(KEY_LEFT_SHIFT);
+    return;
+  }
+  // 無変換キーをCTRLにする
+  if (key == 139) {
+    Keyboard.release(KEY_LEFT_CTRL);
+    return;
+  }
+  // 全角半角きりかえ
+  if (key == 136) {
+    Keyboard.release('`');
+    Keyboard.release(KEY_LEFT_ALT);
+    return;
+  }
+
   if (sendKeyBreak(key)) // HID Usage ID から PS/2 スキャンコード に変換
     delKey(key);
   MsTimer2::start();
@@ -198,6 +227,12 @@ void KbdRptParser::OnKeyUp(uint8_t mod, uint8_t key) {
 //      after  : 変化後のコード USB Keyboard Reportの1バイト目
 //
 void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
+
+#if MYDEBUG==1
+  Serial.print(F("ControlKey ["));  Serial.print(F("before="));  Serial.print(before, DEC);
+  Serial.print(F(" after="));  Serial.print(after, DEC);  Serial.println(F("]"));
+#endif
+
   MODIFIERKEYS beforeMod;
   *((uint8_t*)&beforeMod) = before;
 
@@ -207,10 +242,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 左Ctrlキー
   if (beforeMod.bmLeftCtrl != afterMod.bmLeftCtrl) {
     if (afterMod.bmLeftCtrl) {
-      // 左Ctrlキーを押した
       Keyboard.press(KEY_LEFT_CTRL);
     } else {
-      // 左Ctrltキーを離した
       Keyboard.release(KEY_LEFT_CTRL);
     }
   }
@@ -218,10 +251,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 左Shiftキー
   if (beforeMod.bmLeftShift != afterMod.bmLeftShift) {
     if (afterMod.bmLeftShift) {
-      // 左Shiftキーを押した
       Keyboard.press(KEY_LEFT_SHIFT);
     } else {
-      // 左Shiftキーを離した
       Keyboard.release(KEY_LEFT_SHIFT);
     }
   }
@@ -229,10 +260,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 左Altキー
   if (beforeMod.bmLeftAlt != afterMod.bmLeftAlt) {
     if (afterMod.bmLeftAlt) {
-      // 左Altキーを押した
       Keyboard.press(KEY_LEFT_ALT);
     } else {
-      // 左Altキーを離した
       Keyboard.release(KEY_LEFT_ALT);
     }
   }
@@ -240,10 +269,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 左GUIキー(Winキー)
   if (beforeMod.bmLeftGUI != afterMod.bmLeftGUI) {
     if (afterMod.bmLeftGUI) {
-      // 左GUIキーを押した
       Keyboard.press(KEY_LEFT_GUI);
     } else {
-      // 左GUIキーを離した
       Keyboard.release(KEY_LEFT_GUI);
     }
   }
@@ -251,10 +278,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 右Ctrlキー
   if (beforeMod.bmRightCtrl != afterMod.bmRightCtrl) {
     if (afterMod.bmRightCtrl) {
-      // 右Ctrlキーを押した
       Keyboard.press(KEY_RIGHT_CTRL);
     } else {
-      // 右Ctrlキーを離した
       Keyboard.release(KEY_RIGHT_CTRL);
     }
   }
@@ -262,10 +287,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 右Shiftキー
   if (beforeMod.bmRightShift != afterMod.bmRightShift) {
     if (afterMod.bmRightShift) {
-      // 右Shiftキーを押した
       Keyboard.press(KEY_RIGHT_SHIFT);
     } else {
-      // 右Shiftキーを離した
       Keyboard.release(KEY_RIGHT_SHIFT);
     }
   }
@@ -273,10 +296,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 右Altキー
   if (beforeMod.bmRightAlt != afterMod.bmRightAlt) {
     if (afterMod.bmRightAlt) {
-      // 右Altキーを押した
       Keyboard.press(KEY_RIGHT_ALT);
     } else {
-      // 右Altキーを離した
       Keyboard.release(KEY_RIGHT_ALT);
     };
   }
@@ -284,10 +305,8 @@ void KbdRptParser::OnControlKeysChanged(uint8_t before, uint8_t after) {
   // 右GUIキー
   if (beforeMod.bmRightGUI != afterMod.bmRightGUI) {
     if (afterMod.bmRightGUI) {
-      // 右GUIキーを押した
       Keyboard.press(KEY_RIGHT_GUI);
     } else {
-      // 右GUIキーを離した
       Keyboard.release(KEY_RIGHT_GUI);
     }
   }
