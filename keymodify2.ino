@@ -1,5 +1,5 @@
 //******* 用途により、下記の定義を設定して下さい ***************************
-#define MYDEBUG      1  // 0:デバッグ情報出力なし 1:デバッグ情報出力あり 
+#define MYDEBUG      0  // 0:デバッグ情報出力なし 1:デバッグ情報出力あり 
 //**************************************************************************
 
 #include <MsTimer2.h>
@@ -69,7 +69,7 @@ void delKey(uint8_t key) {
 }
 
 //
-// PS/2 breakコード送信
+// HIDキーボードのコード送信
 // 引数 key(IN) HID Usage ID
 //
 uint8_t sendKeyBreak(uint8_t key) {
@@ -91,7 +91,7 @@ uint8_t changeKeyCode(uint8_t key) {
     KEY_RETURN, KEY_ESC, KEY_BACKSPACE, KEY_TAB, ' ', '-', '=', '[', ']', 'N',
     'N', ';', '\'', 'N', ',', '.', '/', 'N', KEY_F1, KEY_F2,
     KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F11, KEY_F12,
-    'N', 'N', 'N', KEY_INSERT, KEY_HOME, KEY_PAGE_UP, KEY_DELETE, KEY_END, KEY_PAGE_DOWN, KEY_RIGHT_ARROW,
+    'N', 'N', 'KEY_DELETE', KEY_INSERT, KEY_HOME, KEY_PAGE_UP, KEY_DELETE, KEY_END, KEY_PAGE_DOWN, KEY_RIGHT_ARROW,
     KEY_LEFT_ARROW, KEY_DOWN_ARROW, KEY_UP_ARROW, 'N', 'N', 'N', 'N', 'N', 'N', 'N',
     'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
     'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
@@ -107,7 +107,7 @@ uint8_t changeKeyCode(uint8_t key) {
 
 // リピート処理(タイマー割り込み処理から呼ばれる)
 void sendRepeat() {
-  // HID Usage ID から PS/2 スキャンコード に変換
+  // HID Usage ID からHIDキーボードのコード に変換
   uint8_t code = 0;
   uint8_t pre, key;
 
